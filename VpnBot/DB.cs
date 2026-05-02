@@ -8,8 +8,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
+using static CaloriesBot.DBModels;
 
-namespace CalloriesBot
+namespace CaloriesBot
 {
     public class DB
     {
@@ -44,6 +45,33 @@ namespace CalloriesBot
                 """;
             var id = await new NpgsqlConnection(connectionString).ExecuteScalarAsync<long>(sql, user);
             return id;
+        }
+        //public async Task<long> AddMeal(string description, string title, long userId, double proteins, double fats, double carbohydrates, double calories)
+        public async Task<long> AddMeal(DBModels.Food food)
+        {
+            //DBModels.Food user = new DBModels.Food { Description = description, Title = title, UserId = userId, Proteins = proteins, Fats = fats, Carbohydrate = carbohydrates, Calories = calories};
+            if (!food.isValidForDB()) return -1;
+
+            const string sql = """
+            Insert into meals(description,title,user_id,proteins,fats,carbohydrates,calories)
+            Values(@Description,@Title,
+            (SELECT id FROM users WHERE tg_id = @UserId)
+            ,@Proteins,@Fats,@Carbohydrate,@Calories)
+            RETURNING id;
+            """;
+            var id = await new NpgsqlConnection(connectionString).ExecuteScalarAsync<long>(sql, food);
+            return id;
+        }
+        public async Task<DBModels.Food[]> GetMeals(long tgId)
+        {
+            //1170089312
+            const string sql = """
+            Select * 
+            from meals 
+            where user_id = (Select id from users where tg_id = @TgId);
+            """;
+            var meals = await new NpgsqlConnection(connectionString).QueryAsync<DBModels.Food>(sql, new { TgId = tgId });
+            return meals.ToArray();
         }
 
         //public async Task AddMeal()

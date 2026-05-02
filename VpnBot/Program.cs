@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace CalloriesBot
+namespace CaloriesBot
 {
     class Program
     {

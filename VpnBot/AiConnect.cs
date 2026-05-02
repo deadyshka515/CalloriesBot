@@ -7,11 +7,11 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
 
-namespace CalloriesBot
+namespace CaloriesBot
 {
     internal class AiConnect
     {
-        // Важно! HttpClient должен быть один на всё приложение (или использовать IHttpClientFactory)
+        // Важно! HttpClient должен быть один на всё приложение
         private static readonly HttpClient httpClient = new HttpClient
         {
             BaseAddress = new Uri("http://127.0.0.1:1234/")   // базовый адрес API
