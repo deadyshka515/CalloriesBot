@@ -10,19 +10,19 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["VpnBot/VpnBot.csproj", "VpnBot/"]
-RUN dotnet restore "./VpnBot/VpnBot.csproj"
+COPY ["CaloriesBot/CaloriesBot.csproj", "CaloriesBot/"]
+RUN dotnet restore "./CaloriesBot/CaloriesBot.csproj"
 COPY . .
-WORKDIR "/src/VpnBot"
-RUN dotnet build "./VpnBot.csproj" -c $BUILD_CONFIGURATION -o /app/build
+WORKDIR "/src/CaloriesBot"
+RUN dotnet build "./CaloriesBot.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 # Этот этап используется для публикации проекта службы, который будет скопирован на последний этап
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./VpnBot.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./CaloriesBot.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 # Этот этап используется в рабочей среде или при запуске из VS в обычном режиме (по умолчанию, когда конфигурация отладки не используется)
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "VpnBot.dll"]
+ENTRYPOINT ["dotnet", "CaloriesBot.dll"]

@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "VpnBot": {
+    "CaloriesBot": {
       "commandName": "Project"
     },
     "Container (Dockerfile)": {
