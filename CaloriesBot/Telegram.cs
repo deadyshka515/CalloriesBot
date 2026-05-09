@@ -1,4 +1,6 @@
-﻿using Telegram.Bot;
+﻿using System.Text;
+using System.Text.RegularExpressions;
+using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -8,13 +10,50 @@ using static CaloriesBot.DBModels;
 namespace CaloriesBot
 {
     public class TG
-    {   
-        //private string StandartPromt = "Ты — профессиональный нутрициолог и шеф-повар. Отвечай ИСКЛЮЧИТЕЛЬНО на русском языке.\r\n\r\nОтвечай на ЛЮБОЙ запрос пользователя **строго одной строкой** и **только** в следующем формате, без каких-либо дополнительных слов, приветствий, объяснений или переносов строк:\r\n\r\n0|не еда и никак к ней не относится\r\n1|ккал|Б (г)|Ж (г)|У (г)|Название блюда/продукта|Комментарий\r\n\r\nПравила (обязательны к исполнению):\r\n- Всегда начинай ответ с 0| или 1|\r\n- Никогда не пиши ничего кроме одной строки в указанном формате.\r\n- Если запрос совсем не про еду или слишком короткий и непонятный — используй 0|не еда\r\n- Если можно хоть как-то интерпретировать как еду — используй 1| и заполняй все поля.\r\n- Для \"gold\" и подобных односложных слов выводи 0|не еда\r\n- В поле Комментарий пиши максимально коротко (до 15-20 слов).\r\n- Используй стандартную порцию, если размер не указан.\r\n- Запрещено добавлять любой текст до или после формата.";
-        private string StandartPromt = "Ты — профессиональный нутрициолог и шеф-повар. Отвечай исключительно на русском языке.\r\n\r\nОтвечай на ЛЮБОЙ запрос пользователя строго по следующим правилам:\r\n\r\n1. Если запрос явно или предположительно касается еды/продукта/блюда — отвечай ТОЛЬКО в этом формате (ровно так, с пустыми строками):\r\n\r\nПродукт: Название блюда\r\n\r\nКалорийность: X ккал\r\nБелки: X г\r\nЖиры: X г\r\nУглеводы: X г\r\n\r\nОписание: Краткий комментарий\r\n\r\n2. Если запрос НЕ про еду, слишком короткий, непонятный или неоднозначный (например: gold, test, привет, hi, как дела и т.д.) — отвечай **ровно одной строкой**:\r\n\r\n-1\r\n\r\nПравила (очень важно):\r\n- Никогда не добавляй никакой другой текст, приветствия, \"Понял\", \"Готов к работе\", объяснения и т.д.\r\n- Для не-еды — всегда только \"-1\" и ничего больше.\r\n- Для еды — строго указанный формат выше, без лишних строк.\r\n- В \"Описание\" пиши коротко и по делу (1-2 предложения).\r\n- Используй стандартную порцию, если размер не указан.";
+    {
+        private string MinimumPromt = @"Ты — профессиональный нутрициолог и шеф-повар. Отвечай на русском языке.
+            Форматируй ответ с помощью эмоджи, стандартный формат отправки markdown, но в случае неккоретной разметки будет отправлен обычным текстом, поэтому не злоупотребляй им и
+                используй большей эмоджи.";
+
+
+        private string StandartPromt = "Ты — профессиональный нутрициолог и шеф-повар. Отвечай исключительно на русском языке.\r\n\r\n" +
+            "Отвечай на ЛЮБОЙ запрос пользователя строго по следующим правилам:\r\n\r\n" +
+            "1. Если запрос явно или предположительно касается еды/продукта/блюда — отвечай ТОЛЬКО в этом формате (ровно так, с пустыми строками):" +
+            "\r\n\r\nПродукт: Название блюда\r\n\r\nКалорийность: X ккал\r\nБелки: X г\r\nЖиры: X г\r\nУглеводы: X г\r\n\r\n представляй" +
+            " калории и бжу на грамовку которую тебе прислали, если неизвестно какую грамовку имел ввиду пользователь, то кратко упомяни в описании, что расчёт шел на 100гр" +
+            "Описание: Краткий комментарий\r\n\r\n" +
+            "2. Если запрос НЕ про еду, слишком короткий, непонятный или неоднозначный (например: gold, test, привет, hi, как дела и т.д.) — " +
+            "отвечай **ровно одной строкой**:\r\n\r\n-1\r\n\r\nПравила (очень важно):\r\n- Никогда не добавляй никакой другой текст, " +
+            "приветствия, \"Понял\", \"Готов к работе\", объяснения и т.д.\r\n- Для не-еды — всегда только \"-1\" и ничего больше.\r\n- " +
+            "Для еды — строго указанный формат выше, без лишних строк.\r\n- В \"Описание\" пиши коротко и по делу (1-2 предложения,объем учитвается без доп предлоежния про грамовку).\r\n- " +
+            "Используй стандартную порцию, если размер не указан." +
+            "3. Если в запросе пользователь просит проанализировать пищу съеденную в последнее время то отправить \"2\" и ничего больше.";
         private CancellationTokenSource cts;
         private TelegramBotClient bot;
         private DB dB;
         private readonly Dictionary<long,UserSession> userStates;
+
+        public static string RepairMarkDownV2(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            var special = new HashSet<char> { '*','_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!' };
+            var specialPairs = new HashSet<char> { '_', '*', '~', };
+            StringBuilder sB = new StringBuilder(text.Length*2);
+            int i = 0;
+            while (i < text.Length-1)
+            {
+                if (special.Contains(text[i]) && !(specialPairs.Contains(text[i]) && specialPairs.Contains(text[i + 1])))
+                    i++;
+                else
+                {
+                    sB.Append(text[i]);
+                    i++;
+                }
+            }
+            return sB.ToString();
+        }
 
         public enum UserState
         {
@@ -109,9 +148,40 @@ namespace CaloriesBot
                     //string[] aiMesParametrs = aiMesText.Split('|');
                     if (aiMesText == "-1" || aiMesText == "-1\n")
                         await bot.SendMessage(msg.Chat, $"Ошибка, запрос не связан с едой");
+                    else if(aiMesText == "2" || aiMesText == "2\n")
+                    {
+                        DBModels.Food[] meals = dB.GetLastMeals(tgId, -7).Result;
+                        request = new();
+                        request.model = "google/gemma-3-4b";
+                        request.system_prompt = MinimumPromt;
+                        request.input =@"Проанализируй рацион пользователя за последние 7 дней:
+                            { mealsData}
+                            Выдели сильные и слабые стороны, оцени баланс БЖУ и калорийность.Дай конкретные, реалистичные рекомендации по улучшению.
+                            В конце предложи примерный сбалансированный рацион на день.";
+                        foreach (Food food in meals)
+                        {
+                            request.input += food.ToString();
+                        }
+                        response = AiConnect.Post("/api/v1/chat", request).GetAwaiter().GetResult();
+                        aiMesText = response.OutPut[0].Content;
+                        //aiMesText = aiMesText.Replace("*", "");
+                        try
+                        {
+                            await bot.SendMessage(msg.Chat, RepairMarkDownV2(aiMesText),ParseMode.MarkdownV2);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message);
+                            await bot.SendMessage(msg.Chat, aiMesText);
+                        }
+
+
+                    }
                     else
-                        await bot.SendMessage(msg.Chat, aiMesText,
-                            replyMarkup: new InlineKeyboardButton[] { "Записать блюдо"});
+                            {
+                                await bot.SendMessage(msg.Chat, aiMesText,
+                                    replyMarkup: new InlineKeyboardButton[] { "Записать блюдо" });
+                            }
                     //    await bot.SendMessage(msg.Chat, $"Продукт: {aiMesParametrs[5]}\n\nКалорийность: {aiMesParametrs[1]}\nБелки: {aiMesParametrs[2]}\nЖиры: {aiMesParametrs[3]}\nУглеводы: {aiMesParametrs[4]}\n\nОписание: {aiMesParametrs[6]}");
                 }
             }
@@ -164,4 +234,5 @@ namespace CaloriesBot
         //    }
         //}
     }
+
 }

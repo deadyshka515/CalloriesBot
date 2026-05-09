@@ -73,6 +73,18 @@ namespace CaloriesBot
             var meals = await new NpgsqlConnection(connectionString).QueryAsync<DBModels.Food>(sql, new { TgId = tgId });
             return meals.ToArray();
         }
+        public async Task<DBModels.Food[]> GetLastMeals(long tgId, int dayAgo)
+        {
+            var startDate = DateTime.UtcNow.AddDays(dayAgo);
+            const string sql = """
+                SELECT * 
+                FROM meals 
+                WHERE user_id = (SELECT id FROM users WHERE tg_id = @TgId)
+                  AND created_at >= @StartDate;
+            """;
+            var meals = await new NpgsqlConnection(connectionString).QueryAsync<DBModels.Food>(sql, new { TgId = tgId ,StartDate = startDate });
+            return meals.ToArray();
+        }
 
         //public async Task AddMeal()
         //{
