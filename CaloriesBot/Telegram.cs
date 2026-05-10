@@ -33,7 +33,7 @@ namespace CaloriesBot
         private DB dB;
         private readonly Dictionary<long,UserSession> userStates;
 
-        public static string RepairMarkDownV2(string text)
+        public string RepairMarkDownV2(string text)
         {
             if (string.IsNullOrEmpty(text))
                 return text;
@@ -52,7 +52,34 @@ namespace CaloriesBot
                     i++;
                 }
             }
+            sB.Append(text[text.Length]);
             return sB.ToString();
+        }
+        private async Task SendBotMessageMarkDown(Chat chat,string text)
+        {
+            try
+            {
+                await bot.SendMessage(chat, RepairMarkDownV2(text), ParseMode.MarkdownV2);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при отправке сообзения:\n{ex.Message}");
+                await bot.SendMessage(chat, text);
+            }
+        }
+        private async Task SendBotMessageMarkDown(Chat chat, string text, InlineKeyboardButton[] buttons)
+        {
+            var markup = buttons != null ? new InlineKeyboardMarkup(buttons) : null;
+            try
+            {
+                await bot.SendMessage(chat, RepairMarkDownV2(text), ParseMode.MarkdownV2, replyMarkup: markup);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при отправке сообзения:\n{ex.Message}");
+                await bot.SendMessage(chat, text, replyMarkup: markup);
+            }
         }
 
         public enum UserState
@@ -82,7 +109,7 @@ namespace CaloriesBot
 
         async Task OnError(Exception exception, HandleErrorSource source)
         {
-            Console.WriteLine(exception);
+             Console.WriteLine(exception);
         }
 
         async Task OnMessage(Message msg, UpdateType type)
@@ -105,13 +132,13 @@ namespace CaloriesBot
                 DBModels.User user = await dB.GetUserByTgId(tgId);
                 if (user == null)
                 {
-                    await bot.SendMessage(msg.Chat, "О, с вами я ещё не знаком, как вас величать?");
+                    await SendBotMessageMarkDown(msg.Chat, "О, с вами я ещё не знаком, как вас величать?");
                     session.State = UserState.WaitingForName;
                 }
                 else
                 {
                     session.State = UserState.None;
-                    await bot.SendMessage(msg.Chat, $"Чем я могу угодить вам сегодня, {user.Name}?");
+                    await SendBotMessageMarkDown(msg.Chat, $"Чем я могу угодить вам сегодня, {user.Name}?");
                 }
             }
             if (text == "/meals")
@@ -125,7 +152,7 @@ namespace CaloriesBot
                     {
                         str += $"Номер:{food.Id}\n{food.Title}\nК:{food.Calories} Б: {food.Proteins} Ж: {food.Fats} У: {food.Carbohydrate}\n\n";
                     }
-                await bot.SendMessage(msg.Chat, str);
+                await SendBotMessageMarkDown(msg.Chat, str);
                     
             }
             if (!text.StartsWith("/")) //Отграничил ввод текста от команд
@@ -133,7 +160,7 @@ namespace CaloriesBot
                 if(session.State == UserState.WaitingForName)
                 {
                     await dB.AddUser(text, tgId);
-                    await bot.SendMessage(msg.Chat, $"Отныне я буду прислуживать вам, {text}");
+                    await SendBotMessageMarkDown(msg.Chat, $"Отныне я буду прислуживать вам, {text}");
                     session.State = UserState.None;
                 }
                 else
@@ -147,8 +174,9 @@ namespace CaloriesBot
                     
                     //string[] aiMesParametrs = aiMesText.Split('|');
                     if (aiMesText == "-1" || aiMesText == "-1\n")
-                        await bot.SendMessage(msg.Chat, $"Ошибка, запрос не связан с едой");
-                    else if(aiMesText == "2" || aiMesText == "2\n")
+                        //await bot.SendMessage(msg.Chat, $"Ошибка, запрос не связан с едой");
+                        await SendBotMessageMarkDown(msg.Chat, $"Ошибка, запрос не связан с едой");
+                    else if (aiMesText == "2" || aiMesText == "2\n")
                     {
                         DBModels.Food[] meals = dB.GetLastMeals(tgId, -7).Result;
                         request = new();
@@ -165,24 +193,16 @@ namespace CaloriesBot
                         response = AiConnect.Post("/api/v1/chat", request).GetAwaiter().GetResult();
                         aiMesText = response.OutPut[0].Content;
                         //aiMesText = aiMesText.Replace("*", "");
-                        try
-                        {
-                            await bot.SendMessage(msg.Chat, RepairMarkDownV2(aiMesText),ParseMode.MarkdownV2);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine(ex.Message);
-                            await bot.SendMessage(msg.Chat, aiMesText);
-                        }
+                        await SendBotMessageMarkDown(msg.Chat, aiMesText);
 
 
                     }
                     else
                             {
-                                await bot.SendMessage(msg.Chat, aiMesText,
-                                    replyMarkup: new InlineKeyboardButton[] { "Записать блюдо" });
+                                //await bot.SendMessage(msg.Chat, aiMesText,
+                                //    replyMarkup: new InlineKeyboardButton[] { "Записать блюдо" });
+                                await SendBotMessageMarkDown(msg.Chat, aiMesText, new InlineKeyboardButton[] { "Записать блюдо" });
                             }
-                    //    await bot.SendMessage(msg.Chat, $"Продукт: {aiMesParametrs[5]}\n\nКалорийность: {aiMesParametrs[1]}\nБелки: {aiMesParametrs[2]}\nЖиры: {aiMesParametrs[3]}\nУглеводы: {aiMesParametrs[4]}\n\nОписание: {aiMesParametrs[6]}");
                 }
             }
         }
@@ -202,37 +222,22 @@ namespace CaloriesBot
                     if (dB.AddMeal(food).Result != -1)
                     {
                         await bot.AnswerCallbackQuery(query.Id, $"You picked {query.Data}");
-                        await bot.SendMessage(query.Message!.Chat, $"Данные успешно внесены");
+                        await SendBotMessageMarkDown(query.Message!.Chat, $"Данные успешно внесены");
                     }
                     else
                     {
                         await bot.AnswerCallbackQuery(query.Id, $"You picked {query.Data}");
-                        await bot.SendMessage(query.Message!.Chat, $"Ошибка при внесении данных");
+                        await SendBotMessageMarkDown(query.Message!.Chat, $"Ошибка при внесении данных");
                         throw new Exception("Не удалось добавить прием пищи");
                     }
                 }
                 else
                 {
                     await bot.AnswerCallbackQuery(query.Id, $"You picked {query.Data}");
-                    await bot.SendMessage(query.Message!.Chat, $"Ошибка при парсинге еды");
+                    await SendBotMessageMarkDown(query.Message!.Chat, $"Ошибка при парсинге еды");
                 }
-
-
-
-                //await bot.SendMessage(query.Message!.Chat, $"User {query.From} clicked on {query.Data}");
-
             }
         }
-
-        // method that handle other types of updates received by the bot:
-        //async Task OnUpdate(Update update)
-        //{
-        //    if (update is { CallbackQuery: { } query }) // non-null CallbackQuery
-        //    {
-        //        await bot.AnswerCallbackQuery(query.Id, $"You picked {query.Data}");
-        //        await bot.SendMessage(query.Message!.Chat, $"User {query.From} clicked on {query.Data}");
-        //    }
-        //}
     }
 
 }
